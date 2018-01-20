@@ -44,13 +44,12 @@ namespace XDag
         /// Default value of the local work size. Also known as workgroup size.
         static const unsigned _defaultLocalWorkSize = 128;
         /// Default value of the global work size as a multiplier of the local work size
-        static const unsigned _defaultGlobalWorkSizeMultiplier = 8192;
-
-        /// Default value of the kernel is the original one
-        //static const std::string _defaultKernelName;
+        //static const unsigned _defaultGlobalWorkSizeMultiplier = 8192;
+        //TODO: 
+        static const unsigned _defaultGlobalWorkSizeMultiplier = 1024;
 
         CLMiner(unsigned index, XTaskProcessor* taskProcessor);
-        ~CLMiner();
+        virtual ~CLMiner();
 
         static unsigned Instances() { return _numInstances > 0 ? _numInstances : 1; }
         static unsigned GetNumDevices();
@@ -76,7 +75,6 @@ namespace XDag
 
     private:
         void WorkLoop() override;
-        void Report(uint64_t _nonce/*, WorkPackage const& _w*/);
 
         bool Init();
         bool LoadKernel();
@@ -84,8 +82,8 @@ namespace XDag
         cl::Context _context;
         cl::CommandQueue _queue;
         cl::Kernel _searchKernel;
-        cl::Buffer _state;
-        cl::Buffer _minHash;
+        cl::Buffer _stateBuffer;
+        cl::Buffer _minHashBuffer;
         cl::Buffer _searchBuffer;
         unsigned _globalWorkSize = 0;
         unsigned _workgroupSize = 0;
@@ -93,7 +91,6 @@ namespace XDag
 
         static unsigned _platformId;
         static unsigned _numInstances;
-        static unsigned _threadsPerHash;
         static std::string _clKernelName;
         static int _devices[16];
 
@@ -108,5 +105,4 @@ namespace XDag
         wrap_amdsysfs_handle *sysfsh = NULL;
 #endif
     };
-
 }

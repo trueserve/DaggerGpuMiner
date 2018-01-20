@@ -7,7 +7,6 @@
 #include "Utils\Random.h"
 #include "Utils\StringFormat.h"
 
-
 XPool::XPool(std::string& accountAddress, std::string& poolAddress, XTaskProcessor *taskProcessor)
 {
     strcpy(_poolAddress, poolAddress.c_str());
@@ -19,7 +18,7 @@ XPool::XPool(std::string& accountAddress, std::string& poolAddress, XTaskProcess
     _taskTime = 0;
     _lastShareTime = 0;
     memset(_lastHash, 0, sizeof(cheatcoin_hash_t));
-    
+
     XAddress address;
     address.AddressToHash(accountAddress.c_str(), _addressHash);
 }
@@ -83,8 +82,8 @@ bool XPool::SendToPool(cheatcoin_field *fields, int fieldCount)
 
     if (fieldCount == CHEATCOIN_BLOCK_FIELDS)
     {
-        clog(XDag::LogChannel) << string_format("Sent  : %016llx%016llx%016llx%016llx t=%llx res=OK",
-            hash[3], hash[2], hash[1], hash[0], fields[0].time);
+        clog(XDag::LogChannel) << string_format("Sent block info t=%llx res=OK\n%016llx%016llx%016llx%016llx",
+            fields[0].time, hash[3], hash[2], hash[1], hash[0]);
     }
     return true;
 }
@@ -92,6 +91,11 @@ bool XPool::SendToPool(cheatcoin_field *fields, int fieldCount)
 bool XPool::Initialize()
 {
     if (!_network.Initialize() || !InitCrypto())
+    {
+        return false;
+    }
+
+    if (!XBlock::GetFirstBlock(&_firstBlock))
     {
         return false;
     }
@@ -125,22 +129,21 @@ bool XPool::InitCrypto()
 
 bool XPool::Connect()
 {
-    cheatcoin_block firstBlock;
-    if (!XBlock::GetFirstBlock(&firstBlock))
-    {
-        return false;
-    }
-
     if (!_network.Connect(_poolAddress))
     {
         return false;
     }
     //as far as I understand it is necessary for miner identification
-    if (!SendToPool(firstBlock.field, CHEATCOIN_BLOCK_FIELDS))
+    if (!SendToPool(_firstBlock.field, CHEATCOIN_BLOCK_FIELDS))
     {
         return false;
     }
     return true;
+}
+
+void XPool::Disconnect()
+{
+    _network.Close();
 }
 
 bool XPool::Interract()
@@ -208,20 +211,23 @@ void XPool::OnNewTask(cheatcoin_field* data)
 {
     cheatcoin_pool_task *task = _taskProcessor->GetNextTask()->GetTask();
     task->main_time = XBlock::GetMainTime();
-	
+
     XHash::SetHashState(&task->ctx, data[0].data, sizeof(struct cheatcoin_block) - 2 * sizeof(struct cheatcoin_field));
-	
+
     XHash::HashUpdate(&task->ctx, data[1].data, sizeof(struct cheatcoin_field));
     XHash::HashUpdate(&task->ctx, _addressHash, sizeof(cheatcoin_hashlow_t));
     CRandom::FillRandomArray((uint8_t*)task->nonce.data, sizeof(cheatcoin_hash_t));
     memcpy(task->nonce.data, _addressHash, sizeof(cheatcoin_hashlow_t));
     memcpy(task->lastfield.data, task->nonce.data, sizeof(cheatcoin_hash_t));
     XHash::HashFinal(&task->ctx, &task->nonce.amount, sizeof(uint64_t), task->minhash.data);
-	
+
     _taskProcessor->SwitchTask();
     _taskTime = time(0);
-    
-    clog(XDag::LogChannel) << string_format("Task: t=%llx N=%llu", task->main_time << 16 | 0xffff, _taskProcessor->GetCount());
+
+    clog(XDag::LogChannel) << string_format("New task: t=%llx N=%llu", task->main_time << 16 | 0xffff, _taskProcessor->GetCount());
+#if _TEST_TASKS
+    _taskProcessor->DumpTasks();
+#endif
     _ndata = 0;
     _maxndata = sizeof(struct cheatcoin_field);
 }
@@ -233,8 +239,8 @@ bool XPool::SendTaskResult()
     _lastShareTime = time(0);
     memcpy(_lastHash, hash, sizeof(cheatcoin_hash_t));
     bool res = SendToPool(&task->lastfield, 1);
-    clog(XDag::LogChannel) << string_format("Share: %016llx%016llx%016llx%016llx t=%llx res=%s", 
-        hash[3], hash[2], hash[1], hash[0], task->main_time << 16 | 0xffff, res ? "OK" : "Fail");
+    clog(XDag::LogChannel) << string_format("Share t=%llx res=%s\n%016llx%016llx%016llx%016llx",
+       task->main_time << 16 | 0xffff, res ? "OK" : "Fail", hash[3], hash[2], hash[1], hash[0]);
     if (!res)
     {
         //mess = "write error on socket";

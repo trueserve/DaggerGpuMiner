@@ -1,5 +1,7 @@
 #include "XCpuMiner.h"
+#include <iostream>
 #include "Core\Log.h"
+#include "Utils\CpuInfo.h"
 
 unsigned XCpuMiner::_numInstances = 0;
 
@@ -20,10 +22,11 @@ void XCpuMiner::WorkLoop()
     uint64_t nonce;
     int iterations = 256;
 
-    while (true)
+    while(true)
     {
         XTaskWrapper* taskWrapper = GetTask();
-        if (taskWrapper == NULL)
+        //TODO: move this check higher (before threads creation) in order to remove spam on startup
+        if(taskWrapper == NULL)
         {
             clog(LogChannel) << "No work. Pause for 2 s.";
             std::this_thread::sleep_for(std::chrono::seconds(2));
@@ -31,7 +34,7 @@ void XCpuMiner::WorkLoop()
         }
 
         //yes, I compare memory addresses
-        if (previousTaskWrapper == NULL || previousTaskWrapper != taskWrapper)
+        if(previousTaskWrapper == NULL || previousTaskWrapper != taskWrapper)
         {
             previousTaskWrapper = taskWrapper;
             memcpy(last.data, taskWrapper->GetTask()->nonce.data, sizeof(cheatcoin_hash_t));
@@ -44,7 +47,7 @@ void XCpuMiner::WorkLoop()
         AddHashCount(iterations);
 
         // Check if we should stop.
-        if (ShouldStop())
+        if(ShouldStop())
         {
             break;
         }
@@ -68,4 +71,11 @@ HwMonitor XCpuMiner::Hwmon()
     hw.tempC = tempC;
     hw.fanP = fanpcnt;
     return hw;
+}
+
+void XCpuMiner::ListDevices()
+{
+    //TODO: multi cpu system?
+
+    std::cout << "Cpu " << CpuInfo::GetNumberOfCpuCores() << " cores";
 }

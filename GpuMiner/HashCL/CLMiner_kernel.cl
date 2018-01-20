@@ -163,18 +163,29 @@ void sha256_final(SHA256_CTX *ctx, uchar *hash)
     }
 }
 
-//TODO: do I need bitLen?
+int cmphash(uint *l, uint *r) 
+{
+    for (int i = 8; i >= 0; --i)
+    {
+        if (l[i] != r[i])
+        {
+            return (l[i] < r[i] ? -1 : 1);
+        }
+    }
+    return 0;
+}
+
 __kernel void search_nonce(__constant uint const* hashState,
                             ulong startNonce, 
                             uint iterations,
-                            __constant hash32_t const* targetHash,
+                            __constant uint const* targetHash,
                             __global ulong *output)
 {
     SHA256_CTX ctx;
     uint hash[8];
     uint minHash[8];
     ulong min_nonce = 0;
-    size_t id = get_global_id();
+    size_t id = get_global_id(0);
     ulong nonce = startNonce + id * iterations;
 
     for(uint i = 0; i < 8; ++i)
@@ -187,20 +198,20 @@ __kernel void search_nonce(__constant uint const* hashState,
         {
             ctx.state[i] = hashState[i];
         }
-        ctx.bitlen = bitLen;
+        ctx.bitlen = 3584;
         ctx.datalen = 0;
         for(uint j = 0; j < 64; ++j)
         {
             ctx.data[j] = 0;
         }
 
-        sha256_update(&ctx, &nonce, 8);
+        sha256_update(&ctx, (uchar*)&nonce, 8);
         sha256_final(&ctx, (uchar*)hash);
         sha256_init(&ctx);
         sha256_update(&ctx, (uchar*)hash, 32);
         sha256_final(&ctx, (uchar*)hash);
 
-        if(cheatcoin_cmphash(minHash, hash) < 0)
+        if(cmphash(minHash, hash) < 0)
         {
             for(uint i = 0; i < 8; ++i)
             {
